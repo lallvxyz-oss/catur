@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Catur</title>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 :root{
   --bg:#e9efe9; --ink:#1f2a24; --muted:#5b6b62;
@@ -233,7 +234,15 @@ body{padding:0;min-height:100%}
 <div class="opts" id="mainopts">
 <button class="opt" data-m="pvp"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c0-4 3-6 6-6s6 2 6 6M10 20c0-4 3-6 6-6s6 2 6 6"/></svg></span><span class="tx"><b>Bermain berdua</b><small>Dua pemain, satu layar</small></span><span class="ar">›</span></button>
 <button class="opt" data-m="ai"><span class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></span><span class="tx"><b>Vs komputer</b><small>Tantang kecerdasan buatan</small></span><span class="ar">›</span></button>
+<button class="opt" id="onbtn"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></span><span class="tx"><b>Main online</b><small>Dua HP, satu pertandingan</small></span><span class="ar">›</span></button>
 <button class="opt" data-m="theme"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></span><span class="tx"><b>Tampilan papan</b><small>Warna papan dan model bidak</small></span><span class="ar">›</span></button>
+</div>
+<div class="opts" id="onopts" hidden>
+<button class="opt" id="oncreate"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span class="tx"><b>Buat ruang</b><small>Kamu main Putih, bagikan kodenya</small></span><span class="ar">›</span></button>
+<input id="oncode" maxlength="4" placeholder="KODE RUANG" autocomplete="off" autocapitalize="characters" style="width:100%;padding:12px;border-radius:12px;border:1px solid rgba(110,231,255,.4);background:rgba(255,255,255,.06);color:#e8f1ff;font:600 1.1rem ui-monospace,Menlo,monospace;letter-spacing:.3em;text-align:center">
+<button class="opt" id="onjoin"><span class="ic"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="tx"><b>Gabung</b><small>Masukkan kode, kamu main Hitam</small></span><span class="ar">›</span></button>
+<p id="onmsg" class="sub" style="text-align:center;min-height:1.2em"></p>
+<button class="opt" id="onback"><span class="ic"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></span><span class="tx"><b>Kembali</b><small>Ke menu utama</small></span></button>
 </div>
 <div class="opts" id="lvlopts" hidden>
 <button class="opt" data-lv="0"><span class="ic"><svg viewBox="0 0 24 24" style="stroke-width:3"><path d="M5 19v-4"/><path d="M12 19v-8" opacity=".3"/><path d="M19 19V5" opacity=".3"/></svg></span><span class="tx"><b>Mudah</b><small>Santai, sering salah langkah</small></span><span class="ar">›</span></button>
@@ -391,8 +400,10 @@ const hasMoves=s=>Object.keys(pieces).some(i=>pieces[i].s===s&&targets(i).length
 function render(){
   boardEl.innerHTML="";
   const t=targets(selected), chk=mode!=="edit"&&inCheck(turn);
-  for(let r=0;r<8;r++){
-    for(let c=0;c<8;c++){
+  const flip=mode==="online"&&myS==="b";
+  for(let dr=0;dr<8;dr++){
+    for(let dc=0;dc<8;dc++){
+      const r=flip?7-dr:dr, c=flip?7-dc:dc;
       const s=document.createElement("div");
       s.className="sq "+((r+c)%2===0?"l":"d");
       s.tabIndex=0;
@@ -402,7 +413,7 @@ function render(){
       if(k){
         s.innerHTML=SVG[pieces[k].t].replace('class="pawn"','class="pawn '+pieces[k].s+((lastMove&&lastMove.r===r&&lastMove.c===c)?' slide':'')+'"');
         if(lastMove&&lastMove.r===r&&lastMove.c===c){
-          s.style.setProperty("--dx",((lastMove.fc-c)*147)+"%"); s.style.setProperty("--dy",((lastMove.fr-r)*147)+"%");
+          s.style.setProperty("--dx",((lastMove.fc-c)*147*(flip?-1:1))+"%"); s.style.setProperty("--dy",((lastMove.fr-r)*147*(flip?-1:1))+"%");
           s.classList.add("land"); if(lastMove.cap) s.classList.add("cap2");
         }
         if(k===selected) s.classList.add("sel");
@@ -422,12 +433,13 @@ function render(){
   lastMove=null;
   if(mode==="edit"){statusEl.textContent="Edit papan: pilih bidak, lalu ketuk kotak. Ketuk bidak yang sama untuk menghapus.";return;}
   const pre=chk?"SKAK! ":"";
+  if(mode==="online"&&!ready){statusEl.textContent=myS==="w"?"Menunggu lawan… Bagikan kode ruang: "+roomCode:"Menyambung ke ruang "+roomCode+"…";return;}
   if(winner==="draw") statusEl.textContent="Remis (pat): "+SIDE[turn]+" tidak punya langkah sah.";
   else if(winner) statusEl.textContent="Skakmat! "+SIDE[winner]+" menang. Raja "+(winner==="w"?"hitam":"putih")+" tumbang.";
   else if(selected) statusEl.textContent=pre+(t.length
     ? "Pilih kotak bertitik untuk menggerakkan "+NAMES[pieces[selected].t]+"."
     : "Bidak ini belum bisa bergerak. Pilih bidak lain.");
-  else statusEl.textContent=pre+(mode==="ai"&&turn==="b"?"Komputer sedang berpikir…":"Giliran "+SIDE[turn]+(mode==="ai"?" (kamu) · Lawan "+LVN[aiLevel]:"")+". Ketuk bidak untuk memilihnya.");
+  else statusEl.textContent=pre+(mode==="ai"&&turn==="b"?"Komputer sedang berpikir…":"Giliran "+SIDE[turn]+(mode==="ai"?" (kamu) · Lawan "+LVN[aiLevel]:mode==="online"?(turn===myS?" (kamu)":" (lawan)")+" · Ruang "+roomCode:"")+". Ketuk bidak untuk memilihnya.");
 }
 
 function doMove(id,r,c){
@@ -445,13 +457,14 @@ function doMove(id,r,c){
 
 function move(r,c){
   const p=pieces[selected], cap=!!at(r,c);
-  lastMove={fr:p.r,fc:p.c,r,c,cap};
+  lastMove={fr:p.r,fc:p.c,r,c,cap}; const lm=lastMove;
   doMove(selected,r,c);
   selected=null;
   turn=turn==="w"?"b":"w";
   if(!hasMoves(turn)) winner=inCheck(turn)?(turn==="w"?"b":"w"):"draw";
   render();
   hap(winner?[40,60,40]:inCheck(turn)?[30,50,30]:cap?20:12);
+  if(mode==="online") pushOnline(lm);
   if(mode==="ai"&&turn==="b"&&!winner) setTimeout(aiMove,200);
 }
 
@@ -503,7 +516,7 @@ function aiMove(){
 }
 
 function click(r,c){
-  if(winner||(mode==="ai"&&turn==="b")) return;
+  if(winner||(mode==="ai"&&turn==="b")||(mode==="online"&&(!ready||turn!==myS))) return;
   if(selected && targets(selected).some(x=>x.r===r&&x.c===c)){ move(r,c); return; }
   const k=at(r,c);
   if(k && pieces[k].s===turn){ selected=(selected===k)?null:k; hap(8); }
@@ -607,7 +620,7 @@ function load(m){
   runLoad(["Menyusun papan…","Memanggil bidak…",m==="ai"?"Mengaktifkan lawan komputer…":m==="theme"?"Memuat tampilan…":"Menyiapkan dua pemain…","Hampir siap…"],5000,()=>{ if(m==="ai") chooseLevel(); else if(m==="theme") chooseTheme(); else enter(m); });
 }
 function backLoad(){
-  mode=null;
+  mode=null; offOnline();
   runLoad(["Menyimpan papan…","Menutup permainan…","Kembali ke lobi…"],2500,()=>{ resetLobby(); show(null); });
 }
 
@@ -615,7 +628,7 @@ document.querySelectorAll("#lobby [data-m]").forEach(b=>b.onclick=()=>load(b.dat
 
 function resetLobby(){
   $("themeopts").hidden=true; $("lobby").classList.remove("tm");
-  $("mainopts").hidden=false; $("lvlopts").hidden=true;
+  $("mainopts").hidden=false; $("lvlopts").hidden=true; $("onopts").hidden=true;
   $("lobbysub").textContent="Strategi · Logika · Masa depan";
 }
 function chooseLevel(){
@@ -720,8 +733,61 @@ function applyPiece(i){
   d.className="fp fp"+i; d.innerHTML=SVG[t];
   $("fl").appendChild(d);
 });
+/* ===== Online (PeerJS, tanpa login) ===== */
+let myS="w", roomCode="", ready=false, ver=0, peer=null, conn=null;
+function offOnline(){
+  try{ if(conn) conn.close(); }catch(e){}
+  try{ if(peer) peer.destroy(); }catch(e){}
+  conn=null; peer=null; ready=false;
+}
+function pushOnline(lm){
+  if(!conn||!conn.open) return;
+  ver++;
+  conn.send({v:ver,pieces:JSON.stringify(pieces),turn,winner:winner||"",lm:lm?JSON.stringify(lm):""});
+}
+function applyRemote(x){
+  if(!x||typeof x.v!=="number"||x.v<=ver) return;
+  ver=x.v; pieces=JSON.parse(x.pieces); turn=x.turn; winner=x.winner||null; selected=null;
+  lastMove=x.lm?JSON.parse(x.lm):null; render();
+}
+function wire(c){
+  conn=c;
+  c.on("open",()=>{
+    ready=true;
+    if(myS==="w"){ ver++; c.send({v:ver,pieces:JSON.stringify(pieces),turn,winner:winner||"",lm:""}); }
+    render();
+  });
+  c.on("data",applyRemote);
+  c.on("close",()=>{ ready=false; if(mode==="online") statusEl.textContent="Lawan terputus. Kembali ke lobi untuk membuat ruang baru."; });
+}
+function startOnline(code,side,join){
+  offOnline(); roomCode=code; myS=side; ver=join?-1:0; ready=false;
+  show("online"); reset();
+  if(typeof Peer==="undefined"){ statusEl.textContent="PeerJS gagal dimuat. Periksa koneksi internet."; return; }
+  if(!join){
+    peer=new Peer("catur-"+code);
+    peer.on("connection",c=>{ if(conn&&conn.open){ c.close(); return; } wire(c); });
+    peer.on("error",e=>{ statusEl.textContent=e.type==="unavailable-id"?"Kode ruang sudah dipakai. Kembali ke lobi dan buat ruang lagi.":"Koneksi bermasalah: "+e.type; });
+  } else {
+    peer=new Peer();
+    peer.on("open",()=>wire(peer.connect("catur-"+code,{reliable:true})));
+    peer.on("error",e=>{ statusEl.textContent=e.type==="peer-unavailable"?"Ruang tidak ditemukan. Periksa kodenya.":"Koneksi bermasalah: "+e.type; });
+  }
+}
+$("onbtn").onclick=()=>{ $("mainopts").hidden=true; $("onopts").hidden=false; $("onmsg").textContent=""; $("lobbysub").textContent="Main online"; };
+$("onback").onclick=resetLobby;
+$("oncreate").onclick=()=>{
+  const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let c="";
+  for(let i=0;i<4;i++) c+=A[Math.floor(Math.random()*A.length)];
+  resetLobby(); startOnline(c,"w",false);
+};
+$("onjoin").onclick=()=>{
+  const code=$("oncode").value.trim().toUpperCase();
+  if(code.length<4){ $("onmsg").textContent="Masukkan 4 karakter kode ruang."; return; }
+  resetLobby(); startOnline(code,"b",true);
+};
 $("tolobby").onclick=backLoad;
-$("reset").onclick=reset;
+$("reset").onclick=()=>{ reset(); if(mode==="online"&&ready) pushOnline(null); };
 $("edclear").onclick=()=>{ pieces={}; render(); };
 $("edstart").onclick=reset;
 $("edturn").onclick=()=>{ edTurn=edTurn==="w"?"b":"w"; $("edturn").textContent="Giliran: "+SIDE[edTurn]; };
